@@ -2,10 +2,10 @@
 let runtime;
 async function ready(){
   if(!runtime) runtime=(async()=>{
-    postMessage({type:'log',message:'Python 실행환경 불러오는 중…'});
+    postMessage({type:'log',message:'Loading the Python runtime…'});
     importScripts('https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js');
     const p=await loadPyodide();
-    const response=await fetch('engine.py');if(!response.ok)throw Error('engine.py를 불러오지 못했습니다.');
+    const response=await fetch('engine.py');if(!response.ok)throw Error('Could not load engine.py.');
     p.FS.writeFile('engine.py',await response.text());
     await p.runPythonAsync('from engine import *');
     p.globals.set('report_progress',m=>postMessage({type:'log',message:m}));

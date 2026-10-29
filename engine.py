@@ -6,10 +6,10 @@ MAX_CELLS = 1048576
 
 def finite(value, name, low=None, high=None):
     if isinstance(value, bool):
-        raise ValueError(f'{name}: 숫자가 필요합니다.')
+        raise ValueError(f'{name}: A number is required.')
     v = float(value)
     if not math.isfinite(v) or (low is not None and v < low) or (high is not None and v > high):
-        raise ValueError(f'{name}: 허용 범위를 확인하세요.')
+        raise ValueError(f'{name}: Check the allowed range.')
     return v
 
 def wave_length(period, depth):
@@ -25,40 +25,40 @@ def wave_length(period, depth):
 
 def build(s):
     nxf, nyf = finite(s['nx'], 'nx', 16, 2048), finite(s['ny'], 'ny', 16, 2048)
-    if not nxf.is_integer() or not nyf.is_integer(): raise ValueError('nx, ny는 정수여야 합니다.')
+    if not nxf.is_integer() or not nyf.is_integer(): raise ValueError('nx and ny must be integers.')
     nx, ny = int(nxf), int(nyf)
-    if nx*ny > MAX_CELLS: raise ValueError('브라우저 버전은 최대 1,048,576셀입니다.')
+    if nx*ny > MAX_CELLS: raise ValueError('The browser version supports up to 1,048,576 cells.')
     lx, ly = finite(s['lx'], 'Lx', .01, 1e7), finite(s['ly'], 'Ly', .01, 1e7)
     dx, dy = lx/nx, ly/ny
-    depth = finite(s['depth'], '기준 수심', .001, 1e5)
-    slope = finite(s['slope'], '경사', -10, 10)
-    pos = finite(s['position'], '시작 위치', 0, 1)
-    height = finite(s['height'], '지형 높이', -1e5, 1e5)
-    width = finite(s['width'], '지형 폭', .001, 1e7)
-    cx, cy = finite(s['cx'], '중심 x', 0, 1)*lx, finite(s['cy'], '중심 y', 0, 1)*ly
-    angle = math.radians(finite(s['terrainAngle'], '지형 방향', -360, 360))
+    depth = finite(s['depth'], 'Reference depth', .001, 1e5)
+    slope = finite(s['slope'], 'Slope', -10, 10)
+    pos = finite(s['position'], 'Start position', 0, 1)
+    height = finite(s['height'], 'Terrain height', -1e5, 1e5)
+    width = finite(s['width'], 'Terrain width', .001, 1e7)
+    cx, cy = finite(s['cx'], 'Center x', 0, 1)*lx, finite(s['cy'], 'Center y', 0, 1)*ly
+    angle = math.radians(finite(s['terrainAngle'], 'Terrain orientation', -360, 360))
     ca, sa = math.cos(angle), math.sin(angle)
     kind = s['terrain']
-    if kind not in ['flat','slope','step','terrace','bar','channel','island']: raise ValueError('지원하지 않는 지형입니다.')
+    if kind not in ['flat','slope','step','terrace','bar','channel','island']: raise ValueError('Unsupported terrain type.')
     # Projection origin is the smallest projected domain corner; slope starts at a fraction of span.
     corners = [0, lx*ca, ly*sa, lx*ca+ly*sa]
     qmin, qmax = min(corners), max(corners)
     start = qmin + pos*(qmax-qmin)
     bs = []
     errors, warnings = [], []
-    if len(s['breakwaters']) > 30: raise ValueError('방파제는 최대 30개입니다.')
+    if len(s['breakwaters']) > 30: raise ValueError('A maximum of 30 breakwaters is supported.')
     for b in s['breakwaters']:
         if not b['enabled']: continue
-        ix, iy = finite(b['i'], '방파제 i', 0, nx-1), finite(b['j'], '방파제 j', 0, ny-1)
-        if not ix.is_integer() or not iy.is_integer(): raise ValueError('방파제 인덱스는 정수여야 합니다.')
-        length, thick = finite(b['length'], '방파제 길이', .001, 1e7), finite(b['thickness'], '방파제 두께', .001, 1e7)
-        a = math.radians(finite(b['angle'], '방파제 각도', -360, 360))
-        crest = finite(b['crest'], '마루표고', -1e5, 1e5)
+        ix, iy = finite(b['i'], 'Breakwater i', 0, nx-1), finite(b['j'], 'Breakwater j', 0, ny-1)
+        if not ix.is_integer() or not iy.is_integer(): raise ValueError('Breakwater indices must be integers.')
+        length, thick = finite(b['length'], 'Breakwater length', .001, 1e7), finite(b['thickness'], 'Breakwater thickness', .001, 1e7)
+        a = math.radians(finite(b['angle'], 'Breakwater angle', -360, 360))
+        crest = finite(b['crest'], 'Crest elevation', -1e5, 1e5)
         x, y = (ix+.5)*dx, (iy+.5)*dy
         c, sn = math.cos(a), math.sin(a)
         ex, ey = abs(c)*length/2+abs(sn)*thick/2, abs(sn)*length/2+abs(c)*thick/2
-        if x-ex < 0 or x+ex > lx or y-ey < 0 or y+ey > ly: errors.append('방파제가 도메인 밖으로 나갑니다.')
-        if thick < 2*max(dx,dy): warnings.append('방파제 두께가 2개 격자보다 작습니다. 지형 정리 과정에서 변형될 수 있습니다.')
+        if x-ex < 0 or x+ex > lx or y-ey < 0 or y+ey > ly: errors.append('A breakwater extends outside the domain.')
+        if thick < 2*max(dx,dy): warnings.append('A breakwater is thinner than two cells. Terrain cleanup may alter its shape.')
         bs.append((x,y,c,sn,length,thick,crest))
     z, hits = [], [0]*len(bs)
     bmin = {k:float('inf') for k in ['west','east','south','north']}
@@ -94,53 +94,53 @@ def build(s):
             for side in sides:
                 bmin[side]=min(bmin[side],h); bmax[side]=max(bmax[side],h)
                 bsum[side]+=h; bcount[side]+=1; blocked[side] |= structure
-    if any(v==0 for v in hits): errors.append('격자에 표현되지 않는 방파제가 있습니다. 두께 또는 위치를 변경하세요.')
+    if any(v==0 for v in hits): errors.append('A breakwater does not intersect any grid cells. Change its thickness or position.')
     side=s['boundary']
-    if side not in bmin: raise ValueError('조파 경계를 선택하세요.')
+    if side not in bmin: raise ValueError('Select a wave generation boundary.')
     hgen=bsum[side]/bcount[side]
-    if bmin[side]<=1e-4: errors.append('조파 경계 바깥 5개 셀 (입력 지형 평탄화 포함)에 dry 영역이 있습니다.')
-    if blocked[side]: errors.append('방파제가 조파 경계 바깥 5개 셀 (입력 지형 평탄화 포함)과 겹칩니다.')
-    theta=math.radians(finite(s['direction'],'파 진행각',-360,360))
+    if bmin[side]<=1e-4: errors.append('The outer five cells at the generation boundary contain dry areas, including the terrain-flattening zone.')
+    if blocked[side]: errors.append('A breakwater overlaps the outer five cells at the generation boundary, including the terrain-flattening zone.')
+    theta=math.radians(finite(s['direction'],'Propagation angle',-360,360))
     inward={'west':math.cos(theta),'east':-math.cos(theta),'south':math.sin(theta),'north':-math.sin(theta)}[side]
-    if inward<=1e-6: errors.append('파 진행 방향이 선택한 경계에서 도메인 안쪽을 향해야 합니다.')
-    H=finite(s['waveHeight'],'파고',.00001,1e5)
-    phase=finite(s['phase'],'위상',-360,360)
-    if s['waveMode'] not in ['period','length']: raise ValueError('파 입력 모드를 확인하세요.')
-    inp=finite(s['waveInput'],'주기/파장',.001,1e7)
+    if inward<=1e-6: errors.append('Waves must propagate into the domain from the selected boundary.')
+    H=finite(s['waveHeight'],'Wave height',.00001,1e5)
+    phase=finite(s['phase'],'Phase',-360,360)
+    if s['waveMode'] not in ['period','length']: raise ValueError('Check the wave input mode.')
+    inp=finite(s['waveInput'],'Period/wavelength',.001,1e7)
     T=inp if s['waveMode']=='period' else (2*math.pi/math.sqrt(G*(2*math.pi/inp)*math.tanh((2*math.pi/inp)*max(hgen,1e-4))))
     L=wave_length(T,max(hgen,1e-4)) if s['waveMode']=='period' else inp
     mean=wet_sum/wet_count if wet_count else 0
-    if not wet_count: errors.append('도메인에 젖은 셀이 없습니다.')
-    if H/2>=bmin[side]: errors.append('파의 골이 조파 구간 바닥에 닿습니다. 파고를 낮추거나 수심을 늘리세요.')
-    if bmax[side]-bmin[side] > .05*max(hgen,1e-4): warnings.append('조파 구간 수심 변동이 5%를 넘습니다. 단일 base_depth로 조파합니다.')
+    if not wet_count: errors.append('The domain has no wet cells.')
+    if H/2>=bmin[side]: errors.append('The wave trough reaches the bed in the generation zone. Reduce wave height or increase depth.')
+    if bmax[side]-bmin[side] > .05*max(hgen,1e-4): warnings.append('Depth variation in the generation zone exceeds 5%. Waves use a single base_depth.')
     resolution=L/max(dx,dy)
-    if resolution<20: warnings.append('파장당 격자가 20개 미만입니다. 격자 수렴성 검토가 필요합니다.')
-    if H/max(hgen,1e-4)>.1 or H/L>.05: warnings.append('입력파의 비선형성이 큽니다. 선형 분산관계와 미리보기의 적용 범위를 검토하세요.')
-    if int(s['solver']) not in [0,1]: raise ValueError('모형 선택을 확인하세요.')
-    if int(s['solver'])==0 and hgen/L>=.05: warnings.append('NLSW의 장파 가정을 벗어나는 입력입니다.')
-    if hgen/L>.5: warnings.append('심해파 영역입니다. 이 Boussinesq 모형의 분산 정확도를 별도로 검토하세요.')
-    if abs(math.sin(theta)*math.cos(theta))>.001: warnings.append('단일 경계 사입사: 인접 경계 및 모서리 영향이 생길 수 있습니다.')
-    finite(s['courant'],'Courant 수',.001,.5); finite(s['friction'],'Manning n',0,1)
-    if s['otherBoundary'] not in ['sponge','wall']: raise ValueError('경계조건을 확인하세요.')
+    if resolution<20: warnings.append('There are fewer than 20 cells per wavelength. Check grid convergence.')
+    if H/max(hgen,1e-4)>.1 or H/L>.05: warnings.append('The input wave is strongly nonlinear. Review the applicability of linear dispersion and this preview.')
+    if int(s['solver']) not in [0,1]: raise ValueError('Check the selected model.')
+    if int(s['solver'])==0 and hgen/L>=.05: warnings.append('The input lies outside the NLSW long-wave assumption.')
+    if hgen/L>.5: warnings.append('Deep-water regime. Check the dispersion accuracy of this Boussinesq model.')
+    if abs(math.sin(theta)*math.cos(theta))>.001: warnings.append('Oblique incidence from a single boundary may produce adjacent-boundary and corner effects.')
+    finite(s['courant'],'Courant number',.001,.5); finite(s['friction'],'Manning n',0,1)
+    if s['otherBoundary'] not in ['sponge','wall']: raise ValueError('Check the boundary conditions.')
     k_approx=(2*math.pi/T)**2/(G*math.sqrt(math.tanh((2*math.pi/T)**2*max(hgen,1e-4)/G)))
     return dict(z=z,nx=nx,ny=ny,dx=dx,dy=dy,zmin=min(z),zmax=max(z),meanDepth=mean,generationDepth=hgen,T=T,L=L,solverL=2*math.pi/k_approx,H=H,theta=theta,phase=math.radians(phase),relative=mean/L,resolution=resolution,errors=list(dict.fromkeys(errors)),warnings=list(dict.fromkeys(warnings)),boundaries={k:dict(minDepth=bmin[k],blocked=blocked[k],meanDepth=bsum[k]/bcount[k]) for k in bmin},wetFraction=wet_count/(nx*ny))
 
 def export_zip(s, progress=lambda msg: None):
-    progress('입력 조건 검증 중…')
+    progress('Validating input conditions…')
     r=build(s)
     if r['errors']: raise ValueError(' / '.join(r['errors']))
-    progress('bathy.txt 작성 중…')
+    progress('Writing bathy.txt…')
     nx,ny=r['nx'],r['ny']
     bath='\n'.join(' '.join(f'{v:.9g}' for v in r['z'][j*nx:(j+1)*nx]) for j in range(ny))+'\n'
-    progress('waves.txt 작성 중…')
+    progress('Writing waves.txt…')
     waves=f"[NumberOfWaves] 1\n=================================\n{r['H']/2:.12g} {r['T']:.12g} {r['theta']:.12g} {r['phase']:.12g}\n"
-    progress('config.json 작성 중…')
+    progress('Writing config.json…')
     config=dict(WIDTH=nx,HEIGHT=ny,dx=r['dx'],dy=r['dy'],grid_type=1,seaLevel=0,base_depth=r['generationDepth'],g=G,Courant_num=float(s['courant']),NLSW_or_Bous=int(s['solver']),Theta=1.5,isManning=1,friction=float(s['friction']),timeScheme=2,Bcoef=1/15,tridiag_solve=2,incident_wave_type=-1,numberOfWaves=1,BoundaryWidth=min(20,max(3,min(nx,ny)//8)),GoogleMapOverlay=0,significant_wave_height=r['H']/math.sqrt(2),dissipation_threshold=.3,whiteWaterDecayRate=.9)
     for side in ['west','east','south','north']:config[side+'_boundary_type']=2 if side==s['boundary'] else (1 if s['otherBoundary']=='sponge' else 0)
     settings=dict(s); settings['schemaVersion']=1
     report={k:v for k,v in r.items() if k!='z'}
     report['notes']=['Rows run south to north; columns west to east. Elevation positive upward; still water is zero.', 'Cell outer bounds define Lx, Ly. dx=Lx/nx. Celeris sample coordinates use i*dx: a half-cell origin shift does not affect ideal geometry.', 'L is exact linear dispersion at generationDepth. solverL uses the inspected upstream approximate boundary dispersion.', 'Regular wave H is crest-to-trough; waves amplitude is H/2. significant_wave_height is H/sqrt(2).', 'Not an executed hydrodynamic simulation. Celeris may alter boundary bathymetry or isolated cells on loading.']
-    progress('ZIP 압축 중…')
+    progress('Compressing ZIP…')
     out=io.BytesIO()
     with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as zipf:
         zipf.writestr('bathy.txt',bath);zipf.writestr('waves.txt',waves)

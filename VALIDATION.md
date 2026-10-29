@@ -20,3 +20,10 @@ Tests cover exact linear dispersion residuals, period/wavelength round trip, mat
 ## Limits of verification
 
 No full Celeris hydrodynamic run was performed. Browser-generated download bytes were not independently retrieved; the identical Python export function's ZIP contents were verified in automated tests. Mobile, Firefox, and maximum-size performance have not been tested. GitHub Pages publication requires repository Pages settings; the preview is not a public deployment.
+
+## English interface and direct entry update
+
+- Translated all interface labels, help, validation messages, runtime logs, and README documentation into English. Source scan found no remaining Korean text.
+- Numeric controls now use text inputs with numeric/decimal keyboard hints, including breakwater controls. Python validation remains active.
+- Re-ran all nine Python tests and JavaScript syntax checks successfully.
+- Chrome preview: entered T=10 s; ArrowUp left the value at 10; diagnostics updated to L=92.37 m. Added breakwater controls appeared as text fields with English labels.

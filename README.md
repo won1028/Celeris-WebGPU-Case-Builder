@@ -1,84 +1,90 @@
 # Celeris WebGPU Case Builder
 
-브라우저에서 이상조건 지형·계산격자·방파제·단일 규칙파를 설계하고 Celeris 입력 ZIP을 생성합니다.
-**Colab/서버 연결 없이 Pyodide Python이 Web Worker에서 실행됩니다.** 최초 실행은 인터넷 연결이 필요합니다.
+Design idealized bathymetry, a computational grid, breakwaters, and a single regular wave in your browser, then download Celeris input files as a ZIP archive.
+**Python runs through Pyodide in a Web Worker, without a Colab session or a computation server.** The initial runtime download requires internet access.
 
-## 실행과 GitHub Pages
+## Run and publish
 
-GitHub 저장소의 **Settings → Pages → Build and deployment → Deploy from a branch → main / (root) → Save**를 선택합니다.
-저장소가 Private이면 현재 GitHub 요금제의 Pages 지원을 확인하세요. 이 프로젝트는 저장소 공개 설정을 변경하지 않습니다.
-게시 URL은 GitHub Pages 설정 화면에서 확인할 수 있습니다. Pages를 활성화하기 전에는 저장소 URL이 홈페이지가 아닙니다.
+In the GitHub repository, select **Settings → Pages → Build and deployment → Deploy from a branch → main / (root) → Save**. The Pages settings screen provides the published URL. For private repositories, check whether your GitHub plan supports Pages. This application does not change repository visibility.
 
-로컬 미리보기:
+For a local preview, run:
 
 ```sh
 python -m http.server 8000
 ```
 
-`http://localhost:8000`을 엽니다. `file://`로 직접 열면 Worker/파일 요청이 차단될 수 있습니다.
+Open `http://localhost:8000`. Opening files directly with `file://` may block workers and file requests.
 
-## 기능
+## Interface
 
-- 좌측 Grid / Bathymetry / 다중 방파제, 중앙 Canvas 지형·격자·파봉선·x 단면, 우측 규칙파 및 config.
-- 일정 수심, 경사면, 계단, 3단 계단, Gaussian 사주·수로, 원뿔형 섬.
-- 방파제 활성화, 0-based 중심 인덱스, 길이·두께·각도·마루표고. 마루표고 < 0이면 잠제.
-- 단일 입사 경계, H/T 또는 H/L, 위상, 방향. 선형 분산관계로 T/L 상호 변환.
-- 젖은 셀의 평균 수심 기준 상대수심 분류, 조파 수심, 파장당 셀 수.
-- 확대/이동, 격자·파봉선 표시, 애니메이션 일시정지, 클릭한 y의 지형 단면.
-- Python 검증과 지형 생성을 미리보기/ZIP 출력에서 공통 사용.
-- dry 및 구조물이 있는 입사 경계 비활성화, 외향 입사·비정상 수치·도메인 밖 구조물 저장 차단.
-- 설정 JSON 다시 불러오기. 최대 1,048,576셀, 방파제 30개.
+- Left: grid, bathymetry, and multiple breakwaters. Center: colored bathymetry, grid, wave crests, and an x cross-section. Right: regular-wave settings and simulation configuration.
+- Terrain options: flat bed, uniform slope, single step, three-step terrace, Gaussian bar, Gaussian channel, and conical island.
+- Breakwaters: enable/disable, zero-based center indices, length, thickness, orientation, and crest elevation. Negative crest elevations represent submerged structures.
+- Wave inputs: one incident boundary, H/T or H/L, phase, and propagation direction. The linear dispersion relation converts between period and wavelength.
+- Diagnostics: mean wet-cell depth, generation depth, relative-depth regime, and cells per wavelength.
+- Preview controls: zoom, pan, grid and wave visibility, animation pause, and cross-section selection by clicking a y position.
+- All numeric settings use direct text entry with a numeric/decimal keyboard hint. There are no increment/decrement buttons; arrow keys and the mouse wheel do not change numeric values. Python still validates numeric ranges and integer indices. Empty or invalid entries block export.
+- Preview and export share the Python geometry and validation engine.
+- Dry or obstructed incident boundaries are disabled. Outward waves, invalid numbers, and structures outside the domain block export.
+- Reload saved settings JSON. Limits: 1,048,576 cells and 30 breakwaters.
 
-## 좌표 / 출력 규약
+## Source layout
 
-정수면은 0 m로 고정. 바닥표고 z는 위쪽이 양수, 수심 h=max(0,-z).
-Lx/Ly는 셀 바깥 경계 간 거리이고 dx=Lx/nx, dy=Ly/ny. 지형 샘플은 셀 중심에 배치합니다.
-Celeris가 표시하는 i*dx 좌표와는 반 셀 원점 차이가 있습니다.
-파/구조물 방향은 +x에서 반시계 방향: 0° 동쪽, 90° 북쪽. 파의 '오는 방향'이 아닌 '가는 방향'입니다.
-
-ZIP 파일:
-
-| 파일 | 내용 |
+| File | Responsibility |
 |---|---|
-| bathy.txt | ny행 × nx열, 첫 행 남쪽, 첫 열 서쪽, 바닥표고 m |
-| waves.txt | NumberOfWaves 1; 진폭 H/2, 주기 s, 진행각 rad, 위상 rad |
-| config.json | Cartesian, NLSW/Boussinesq, 마찰, 단일 조파 경계 및 나머지 경계 |
-| case_settings.json | 버전 1 전체 설계값. 홈페이지에서 다시 불러오기 |
-| validation_report.json | 수심/파랑 지표, 경고와 적용 한계 |
+| `index.html` | Page layout, static labels, and accessibility descriptions |
+| `style.css` | Responsive dashboard and form styling |
+| `app.js` | Controls, direct numeric entry, preview rendering, diagnostics, and downloads |
+| `worker.js` | Pyodide startup and background Python requests |
+| `engine.py` | Geometry, validation, dispersion calculations, and ZIP export; also a CLI |
+| `test_engine.py` | Automated engine and output-format checks |
+| `example_settings.json` | Example input for the browser or CLI |
 
-`incident_wave_type=-1`로 파일의 성분을 사용합니다. 정현파의 significant_wave_height는 H/sqrt(2)로 저장합니다.
-`base_depth`는 선택한 조파 경계 보호 구간의 평균 수심입니다. 최대 수심과 다를 수 있으므로 실제 실행의 CFL/시간간격도 확인하세요.
+## Coordinates and output conventions
 
-## Celeris 소스 확인 (2026-10-29)
+Still water level is fixed at 0 m. Bed elevation z is positive upward; depth is h=max(0,-z).
+Lx and Ly span the outer cell boundaries, with dx=Lx/nx and dy=Ly/ny. Bathymetry is sampled at cell centers. This differs by a half-cell origin shift from the i*dx coordinates displayed by Celeris.
 
-공개 upstream `plynett/plynett.github.io`의 다음 소스를 확인했습니다. 사용자의 별도 수정본과 실제 시뮬레이션 실행까지 검증한 것은 아닙니다.
+Wave and structure angles increase counterclockwise from +x: 0° east, 90° north. Wave direction means the direction of travel, not the direction of origin.
 
-- `js/File_Loader.js`, blob `5e03095a56b989b054c9b05892b3dbcd671ce0f3`: bathy 행/열 파싱, waves 헤더와 성분.
-- `shaders/BoundaryPass.wgsl`, blob `a460c2475115db2c4da5936a5291a98aa9193a42`: 진폭·주기·각도·위상 사용, 바깥 3셀 조파, base_depth 기준 근사 분산식.
-- `js/constants_load_calc.js`, blob `5abbe9ec8905f9f43dea9ed1e1c7954cb44fe6c6`: Cartesian grid_type=1, custom waves incident_wave_type=-1.
+| ZIP member | Contents |
+|---|---|
+| `bathy.txt` | ny rows × nx columns; first row south, first column west; bed elevation in meters |
+| `waves.txt` | NumberOfWaves 1; amplitude H/2, period in seconds, propagation angle and phase in radians |
+| `config.json` | Cartesian grid, NLSW/Boussinesq, friction, one generation boundary, and other boundary conditions |
+| `case_settings.json` | All design settings, schema version 1; reloadable in the website |
+| `validation_report.json` | Depth and wave diagnostics, warnings, and limitations |
 
-입력 loader는 외곽 지형을 내부 4번째 인덱스의 값으로 평탄화합니다. 따라서 UI 검사는 바깥 **5셀**까지 보수적으로 검사합니다. 원본 설계 미리보기와 Celeris에서 경계/단일셀 정리 후의 지형이 다를 수 있습니다.
+`incident_wave_type=-1` selects the wave component from the file. For a sinusoidal wave, `significant_wave_height` is stored as H/sqrt(2).
+`base_depth` is the mean depth of the protected generation zone. It can differ from the maximum depth; check the CFL condition and time step in the actual simulation.
 
-## 물리적 한계
+## Upstream source inspection (2026-10-29)
 
-- 파봉 애니메이션은 입력 방향을 보여주는 그림이며 실제 회절·반사·굴절·쇄파 계산이 아닙니다. dry 영역 위에도 방향선이 겹칠 수 있습니다.
-- 표시 L은 정확한 선형 분산관계 해입니다. 확인한 Celeris 조파 코드는 근사식을 사용하므로 별도의 `Celeris 근사식 L`도 표시합니다.
-- 단일 조파 경계만 지원합니다. 사입사 시 인접 경계·모서리 효과를 검토하세요.
-- 방파제는 지형을 높인 불투과 구조물입니다. 다공성 투과는 지원하지 않습니다.
-- 넓은 지형 변화에 한 개의 평균수심 지표로 모형의 정확도를 보증할 수 없습니다. 경고는 수렴성 검증을 대신하지 않습니다.
-- 브라우저 최대 셀 수는 메모리 보호용 제한입니다. 최대 크기의 성능은 기기에 따라 다릅니다.
-- Pyodide 0.27.7을 버전 고정하여 jsDelivr에서 불러옵니다. 입력 설계값은 외부 계산 서버로 전송하지 않습니다.
+The following public sources in `plynett/plynett.github.io` were inspected. This does not verify a separately modified solver or a complete hydrodynamic run.
 
-## Python CLI / 테스트
+- `js/File_Loader.js`, blob `5e03095a56b989b054c9b05892b3dbcd671ce0f3`: bathymetry row/column parsing and wave headers/components.
+- `shaders/BoundaryPass.wgsl`, blob `a460c2475115db2c4da5936a5291a98aa9193a42`: amplitude, period, angle, phase, generation in the outer three cells, and approximate dispersion using base_depth.
+- `js/constants_load_calc.js`, blob `5abbe9ec8905f9f43dea9ed1e1c7954cb44fe6c6`: Cartesian grid_type=1 and custom waves incident_wave_type=-1.
+
+The loader flattens edge bathymetry using interior samples at index 4 or the corresponding opposite-edge index. The UI therefore checks the outer **five cells** conservatively. Celeris boundary and isolated-cell cleanup can change the bathymetry shown in this design preview.
+
+## Physical and runtime limitations
+
+- Animated crests illustrate the incident direction; they do not calculate diffraction, reflection, refraction, or breaking. Direction lines may overlap dry areas.
+- Displayed L solves the exact linear dispersion relation. The inspected Celeris boundary uses an approximation, so the UI also displays its approximate L.
+- Only one generation boundary is supported. Review adjacent-boundary and corner effects for oblique incidence.
+- Breakwaters are impermeable raised terrain; porous transmission is not modeled.
+- One mean-depth diagnostic cannot establish model accuracy over strongly varying terrain. Warnings do not replace convergence studies.
+- The browser cell limit protects memory. Performance at the maximum size depends on the device.
+- Pyodide is pinned to version 0.27.7 and loaded from jsDelivr. Design inputs are not sent to an external computation server.
+
+## Python CLI and tests
 
 ```sh
 python engine.py case_settings.json -o celeris_case.zip
 python -m unittest -v
 ```
 
-Python 표준 라이브러리만 사용합니다. 브라우저와 CLI 모두 같은 `engine.py`를 사용합니다.
-
-## 검증
-
-9개 자동 테스트: 분산관계, 출력 ZIP/행렬/헤더, 7개 지형, 지형 방향, 외향 입사 차단, 잠제/경계 충돌, dry·과대 파고, 파장입력, 잘못된 수치 및 크기 제한.
-브라우저 검증 결과는 `VALIDATION.md`에 기록합니다.
+Only the Python standard library is required. The browser and CLI use the same `engine.py`.
+Nine automated tests cover dispersion, ZIP contents and matrix/header formats, all seven terrain types, terrain orientation, outward-wave rejection, submerged and boundary breakwaters, dry boundaries and excessive wave height, wavelength input, and invalid numbers and size limits.
+See `VALIDATION.md` for verification details.
