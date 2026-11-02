@@ -12,3 +12,13 @@ header{position:sticky;top:0;z-index:10} .check.error{overflow-wrap:anywhere}
 header{height:auto;min-height:88px;padding-top:14px;padding-bottom:14px;flex-wrap:wrap}
 .regimeLabels{gap:8px}.regimeLabels span{flex:1}.regimeLabels span:last-child{text-align:right}
 @media(max-width:720px){.left{display:block}.savebar{flex-wrap:wrap}header{position:static}}
+
+/* Click-to-expand help stays in the form flow on narrow screens. */
+.fields{align-items:start}
+.fieldHeading{display:flex;align-items:center;gap:5px;margin-bottom:6px;color:#5e747d;font-size:15px}
+.fieldHeading label{cursor:pointer;overflow-wrap:anywhere}
+.infoButton{flex:none;padding:0;width:28px;height:28px;border-radius:50%;border-color:transparent;color:var(--teal);font-size:18px;line-height:1}
+.infoButton[aria-expanded=true]{background:#e5f3ef;border-color:#83bdb5}
+.infoButton:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.fieldHelp{margin:8px 0 0;padding:10px;border-left:2px solid #83bdb5;background:#eff7f5;color:var(--ink);font-size:15px;line-height:1.6;overflow-wrap:anywhere}
+.fieldHelp[hidden]{display:none}

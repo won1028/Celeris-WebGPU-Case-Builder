@@ -6,31 +6,72 @@ const worker=new Worker('worker.js');
 let zoom=1,panX=0,panY=0,selectedJ=50,drag=null,transform;
 const raster=document.createElement('canvas');
 const coast=document.createElement('canvas');
+
+// Help text follows engine.py conventions; terrain-dependent meanings are resolved on render.
+function parameterHelp(key){
+ const terrainHeight={step:'Signed bed-elevation change at the step, in meters. Positive values raise the bed.',terrace:'Signed rise of each of three steps, in meters. The final change is three times this value.',bar:'Signed peak elevation change at the bar centerline, in meters.',channel:'Additional centerline depth in meters. The engine uses the absolute value to deepen the bed.',island:'Signed elevation change at the island center, in meters. For a positive height, summit elevation is height − depth.'};
+ const terrainWidth={terrace:'Distance between consecutive steps along the selected angle, in meters. Must be positive.',bar:'Gaussian standard deviation σ along the width axis, in meters. At one σ from the centerline, the elevation change is about 60.7% of its peak.',channel:'Gaussian standard deviation σ across the channel, in meters. The channel extends along the perpendicular axis.',island:'Island radius in meters. The elevation change decreases linearly to zero at this radius.'};
+ return {
+ nx:'Number of cells along x (west to east). Integer from 16 to 2048. nx × ny must not exceed 1,048,576.',
+ ny:'Number of cells along y (south to north). Integer from 16 to 2048. nx × ny must not exceed 1,048,576.',
+ lx:'Domain length along x in meters, measured between outer cell boundaries. dx = Lx / nx.',
+ ly:'Domain length along y in meters, measured between outer cell boundaries. dy = Ly / ny.',
+ terrain:'Idealized bed shape. Only parameters used by this shape are shown. Previously entered values are retained when switching shapes.',
+ depth:'Positive reference water depth in meters. The unmodified bed is z = −depth; still water is z = 0.',
+ terrainAngle:['bar','channel'].includes(s.terrain)?'Width-axis angle in degrees, counterclockwise from +x. 0° varies across x and extends along y; 90° varies across y and extends along x. Range: −360° to 360°.':'Terrain-axis angle in degrees, counterclockwise from +x. Positive slope or height raises the bed along this direction. 0° = +x, 90° = +y. Range: −360° to 360°.',
+ slope:'Signed bed slope Δz / Δq along the terrain axis after the start position. Dimensionless: 0.05 = 1:20. Negative values deepen the bed. Range: −10 to 10.',
+ position:'Start location as a fraction from 0 to 1 of the domain span projected onto the terrain axis. 0 is the minimum projected corner; 1 is the maximum.',
+ height:terrainHeight[s.terrain],width:terrainWidth[s.terrain],
+ cx:'Normalized center coordinate x / Lx, from 0 to 1. 0 is west; 1 is east.',
+ cy:'Normalized center coordinate y / Ly, from 0 to 1. 0 is south; 1 is north.',
+ boundary:'Wave generation boundary. Its outer five cell rows or columns must be wet and free of breakwaters; the wave angle must point into the domain.',
+ direction:'Wave travel angle in degrees, counterclockwise from +x: 0° east, 90° north, 180° west, −90° south. This is the direction of travel, not origin. Range: −360° to 360°.',
+ waveHeight:'Crest-to-trough wave height H in meters. The exported wave amplitude is H/2. The trough must remain above the bed throughout the generation zone.',
+ waveMode:'Choose the independent wave input: period T or wavelength L. The other value is calculated from linear dispersion using the mean depth of the outer five cells at the generation boundary.',
+ waveInput:s.waveMode==='period'?'Wave period T in seconds. Wavelength L is calculated from (2π/T)² = g(2π/L)tanh(2πh/L), using generation-zone mean depth h.':'Wavelength L in meters at the generation-zone mean depth h. Period T is calculated from the linear dispersion relation. Local wavelength changes with depth.',
+ phase:'Initial sine-wave phase in degrees, from −360° to 360°. A shift of 360° is one complete cycle. Exported in radians.',
+ solver:'Governing equations: NLSW = nonlinear shallow-water equations, for long waves with negligible dispersion. Boussinesq includes dispersive effects. New cases default to NLSW.',
+ courant:'Dimensionless Courant number exported as Courant_num. Allowed range: 0.001 to 0.5. It controls the solver time-step scale; check stability in the actual simulation.',
+ friction:'Manning roughness coefficient n, in s/m^(1/3). Exported with Manning friction enabled. Allowed range: 0 to 1; zero disables this friction contribution.',
+ otherBoundary:'Condition on the three boundaries not selected for wave generation: absorbing sponge or reflecting wall.'
+ }[key];
+}
+function fieldHeading(wrap,input,label,help){
+ const row=document.createElement('div');row.className='fieldHeading';
+ const title=document.createElement('label');title.htmlFor=input.id;title.textContent=label;
+ const info=document.createElement('button');info.type='button';info.className='infoButton';info.textContent='ⓘ';
+ info.setAttribute('aria-label','Help for '+label);info.setAttribute('aria-expanded','false');
+ const detail=document.createElement('p');detail.id=input.id+'-help';detail.className='fieldHelp';detail.hidden=true;detail.textContent=help;
+ info.setAttribute('aria-controls',detail.id);input.setAttribute('aria-describedby',detail.id);
+ info.onclick=()=>{detail.hidden=!detail.hidden;info.setAttribute('aria-expanded',String(!detail.hidden));};
+ wrap.onkeydown=e=>{if(e.key==='Escape'&&!detail.hidden){detail.hidden=true;info.setAttribute('aria-expanded','false');info.focus();e.stopPropagation();}};
+ row.append(title,info);wrap.append(row,input,detail);
+}
+
 function field(parent,key,label,opts={}){
- const wrap=document.createElement('label');wrap.className='field'+(opts.full?' full':'');
- const title=document.createElement('span');title.textContent=label;wrap.append(title);
+ const wrap=document.createElement('div');wrap.className='field'+(opts.full?' full':'');
  let input=document.createElement(opts.options?'select':'input');input.id=key;
  if(opts.options){for(const [value,text] of opts.options){const o=document.createElement('option');o.value=value;o.textContent=text;input.append(o);}}
  else {input.type='text';input.inputMode=opts.step===1?'numeric':'decimal';input.autocomplete='off';input.spellcheck=false;}
  input.value=s[key];const update=()=>{if(key==='waveMode'&&result&&!result.errors.length)s.waveInput=input.value==='period'?result.T:result.L;s[key]=opts.options?input.value:(input.value.trim()===''?null:Number(input.value));if(['nx','ny'].includes(key))selectedJ=Math.floor(s.ny/2);changed(!!opts.options);}; if(opts.options) input.onchange=update; else input.oninput=update;
- wrap.append(input);$(parent).append(wrap);
+ fieldHeading(wrap,input,label,parameterHelp(key));$(parent).append(wrap);
 }
 function controls(){
  for(const id of ['gridFields','terrainTypeFields','terrainFields','waveFields','configFields'])$(id).replaceChildren();
- field('gridFields','nx','nx · Cells along x',{step:1,min:16,max:2048});field('gridFields','ny','ny · Cells along y',{step:1,min:16,max:2048});
- field('gridFields','lx','Domain Lx (m)',{min:.01});field('gridFields','ly','Domain Ly (m)',{min:.01});
- field('terrainTypeFields','terrain','Terrain type',{full:true,options:[['flat','Flat bed'],['slope','Uniform slope'],['step','Single step'],['terrace','Three-step terrace'],['bar','Gaussian bar'],['channel','Gaussian channel'],['island','Conical island']]});
+ field('gridFields','nx','nx',{step:1,min:16,max:2048});field('gridFields','ny','ny',{step:1,min:16,max:2048});
+ field('gridFields','lx','Lx (m)',{min:.01});field('gridFields','ly','Ly (m)',{min:.01});
+ field('terrainTypeFields','terrain','type',{full:true,options:[['flat','Flat bed'],['slope','Uniform slope'],['step','Single step'],['terrace','Three-step terrace'],['bar','Gaussian bar'],['channel','Gaussian channel'],['island','Conical island']]});
  // Only render parameters used by the selected terrain; retain values when switching types.
  const terrainKeys={flat:['depth'],slope:['depth','terrainAngle','slope','position'],step:['depth','terrainAngle','height','position'],terrace:['depth','terrainAngle','height','position','width'],bar:['depth','terrainAngle','height','width','cx','cy'],channel:['depth','terrainAngle','height','width','cx','cy'],island:['depth','height','width','cx','cy']}[s.terrain]||[];
- const parameterLabels={depth:'Reference depth (m)',terrainAngle:['bar','channel'].includes(s.terrain)?'Width axis (°)':'Rise direction (°)',slope:'Slope Δz / Δx',position:'Start position (0–1)',height:{step:'Step rise (m)',terrace:'Rise per step (m)',bar:'Bar height (m)',channel:'Channel depth (m)',island:'Island height (m)'}[s.terrain],width:{terrace:'Step width (m)',bar:'Gaussian width σ (m)',channel:'Gaussian width σ (m)',island:'Island radius (m)'}[s.terrain],cx:'Center x / Lx (0–1)',cy:'Center y / Ly (0–1)'};
+ const parameterLabels={depth:'depth (m)',terrainAngle:'angle (°)',slope:'slope',position:'start',height:'height (m)',width:s.terrain==='island'?'radius (m)':s.terrain==='terrace'?'width (m)':'σ (m)',cx:'cx',cy:'cy'};
  for(const key of terrainKeys)field('terrainFields',key,parameterLabels[key]);
- field('waveFields','boundary','Incident boundary',{full:true,options:[['west','West · x = 0'],['east','East · x = Lx'],['south','South · y = 0'],['north','North · y = Ly']]});
- field('waveFields','direction','Propagation angle (°)');field('waveFields','waveHeight','Wave height H (m)',{min:.00001});
- field('waveFields','waveMode','Wave input',{full:true,options:[['period','Period T → calculate wavelength'],['length','Wavelength L → calculate period']]});
- field('waveFields','waveInput',s.waveMode==='period'?'Period T (s)':'Wavelength L (m)',{min:.001});field('waveFields','phase','Initial phase (°)');
- field('configFields','solver','Governing equations',{full:true,options:[['0','NLSW · Long waves'],['1','Boussinesq']]});
- field('configFields','courant','Courant number',{min:.001,max:.5});field('configFields','friction','Manning n',{min:0,max:1});
- field('configFields','otherBoundary','Other boundaries',{full:true,options:[['sponge','Absorbing sponge'],['wall','Reflecting wall']]});
+ field('waveFields','boundary','boundary',{full:true,options:[['west','West · x = 0'],['east','East · x = Lx'],['south','South · y = 0'],['north','North · y = Ly']]});
+ field('waveFields','direction','angle (°)');field('waveFields','waveHeight','H (m)',{min:.00001});
+ field('waveFields','waveMode','input',{full:true,options:[['period','Period T'],['length','Wavelength L']]});
+ field('waveFields','waveInput',s.waveMode==='period'?'T (s)':'L (m)',{min:.001});field('waveFields','phase','phase (°)');
+ field('configFields','solver','equations',{full:true,options:[['0','NLSW · Long waves'],['1','Boussinesq']]});
+ field('configFields','courant','CFL',{min:.001,max:.5});field('configFields','friction','n',{min:0,max:1});
+ field('configFields','otherBoundary','other BCs',{full:true,options:[['sponge','Absorbing sponge'],['wall','Reflecting wall']]});
  $('terrainHelp').textContent={flat:'Bed elevation z = −reference depth.',slope:'Rises along the selected axis after the start position. Slope 0.05 = 1:20.',step:'Bed elevation changes by the step rise at the start position.',terrace:'Creates three steps, spaced by the step width, after the start position.',bar:'Adds the specified height at the centerline. Width is the Gaussian standard deviation σ.',channel:'Deepens the centerline by the absolute terrain height. Width is the standard deviation σ.',island:'Height peaks at the center. Beyond the radius, the bed returns to the reference depth.'}[s.terrain];
  renderBreakwaters();
 }
@@ -42,8 +83,8 @@ function renderBreakwaters(){
   const head=document.createElement('div');head.className='bwHead';const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=b.enabled;check.onchange=()=>{b.enabled=check.checked;changed();};label.append(check,` Breakwater ${index+1} · ${b.crest<0?'Submerged':'Emergent'}`);
   const remove=document.createElement('button');remove.textContent='Remove';remove.onclick=()=>{s.breakwaters.splice(index,1);changed();};head.append(label,remove);box.append(head);
   const fields=document.createElement('div');fields.className='fields';
-  for(const [key,text] of [['i','Center i (0-based)'],['j','Center j (0-based)'],['length','Length (m)'],['thickness','Thickness (m)'],['angle','Orientation (°)'],['crest','Crest elevation (m)']]){
-   const l=document.createElement('label');l.className='field';const span=document.createElement('span');span.textContent=text;const inp=document.createElement('input');inp.type='text';inp.inputMode=['i','j'].includes(key)?'numeric':'decimal';inp.autocomplete='off';inp.spellcheck=false;inp.value=b[key];inp.disabled=!b.enabled;inp.oninput=()=>{b[key]=inp.value.trim()===''?null:Number(inp.value);changed(false);};l.append(span,inp);fields.append(l);
+  for(const [key,text] of [['i','i'],['j','j'],['length','length (m)'],['thickness','thickness (m)'],['angle','angle (°)'],['crest','crest (m)']]){
+   const l=document.createElement('div');l.className='field';const inp=document.createElement('input');inp.id=`bw-${index}-${key}`;inp.type='text';inp.inputMode=['i','j'].includes(key)?'numeric':'decimal';inp.autocomplete='off';inp.spellcheck=false;inp.value=b[key];inp.disabled=!b.enabled;inp.oninput=()=>{b[key]=inp.value.trim()===''?null:Number(inp.value);changed(false);};fieldHeading(l,inp,text,{i:'Zero-based center cell index along x. Integer from 0 to nx − 1. Center x = (i + 0.5) × dx.',j:'Zero-based center cell index along y. Integer from 0 to ny − 1. Center y = (j + 0.5) × dy.',length:'Full structure length along its angle, in meters. Must be positive and fit inside the domain.',thickness:'Full structure thickness perpendicular to its length, in meters. Fewer than two grid cells triggers a resolution warning.',angle:'Length-axis orientation in degrees, counterclockwise from +x: 0° horizontal, 90° vertical. Range: −360° to 360°.',crest:'Crest elevation in meters relative to still water z = 0. Negative = submerged; positive = above water; zero = at still water. The bed is raised to max(existing bed, crest), never lowered.'}[key]);fields.append(l);
   }box.append(fields);$('breakwaters').append(box);
  });
 }

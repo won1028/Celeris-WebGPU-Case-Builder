@@ -19,6 +19,7 @@ Open `http://localhost:8000`. Opening files directly with `file://` may block wo
 
 - Left: grid, bathymetry, and multiple breakwaters. Center: colored bathymetry, grid, wave crests, and an x cross-section. Right: regular-wave settings and simulation configuration.
 - Bathymetry is split into **02-1 Terrain type** and **02-2 Parameters**. Only parameters used by the selected terrain are displayed, with terrain-specific labels. Values are retained when switching terrain types.
+- Parameter labels use compact symbols and names. Click the adjacent ⓘ button to expand an English explanation of units, coordinates, and meaning. Click again or press Escape to close it; Enter/Space also activate the focused button. Terrain help follows the selected shape.
 - New cases default to **NLSW**; loading a saved case retains its solver selection.
 - Interface and canvas text sizes are increased by 3 pt (4 CSS px).
 - Terrain options: flat bed, uniform slope, single step, three-step terrace, Gaussian bar, Gaussian channel, and conical island.
