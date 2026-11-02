@@ -20,7 +20,7 @@
   "waveInput": 8,
   "waveHeight": 1,
   "phase": 0,
-  "solver": 1,
+  "solver": 0,
   "courant": 0.15,
   "friction": 0.02,
   "otherBoundary": "sponge"

@@ -18,6 +18,9 @@ Open `http://localhost:8000`. Opening files directly with `file://` may block wo
 ## Interface
 
 - Left: grid, bathymetry, and multiple breakwaters. Center: colored bathymetry, grid, wave crests, and an x cross-section. Right: regular-wave settings and simulation configuration.
+- Bathymetry is split into **02-1 Terrain type** and **02-2 Parameters**. Only parameters used by the selected terrain are displayed, with terrain-specific labels. Values are retained when switching terrain types.
+- New cases default to **NLSW**; loading a saved case retains its solver selection.
+- Interface and canvas text sizes are increased by 3 pt (4 CSS px).
 - Terrain options: flat bed, uniform slope, single step, three-step terrace, Gaussian bar, Gaussian channel, and conical island.
 - Breakwaters: enable/disable, zero-based center indices, length, thickness, orientation, and crest elevation. Negative crest elevations represent submerged structures.
 - Wave inputs: one incident boundary, H/T or H/L, phase, and propagation direction. The linear dispersion relation converts between period and wavelength.

@@ -27,3 +27,9 @@ No full Celeris hydrodynamic run was performed. Browser-generated download bytes
 - Numeric controls now use text inputs with numeric/decimal keyboard hints, including breakwater controls. Python validation remains active.
 - Re-ran all nine Python tests and JavaScript syntax checks successfully.
 - Chrome preview: entered T=10 s; ArrowUp left the value at 10; diagnostics updated to L=92.37 m. Added breakwater controls appeared as text fields with English labels.
+
+## Terrain parameters and typography — 2026-11-02
+
+- Chrome: all seven terrain selections displayed only their relevant parameters, including terrain-specific height and width labels.
+- Initial solver selection was NLSW. Body/input computed font sizes were 18/16 px, each 4 px (3 pt) larger. No page-level horizontal overflow at the tested desktop viewport.
+- JavaScript syntax check and all nine Python tests passed.

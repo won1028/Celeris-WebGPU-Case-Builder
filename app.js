@@ -1,6 +1,6 @@
 'use strict';
 const $=id=>document.getElementById(id);
-const defaults={schemaVersion:1,nx:160,ny:100,lx:320,ly:200,terrain:'slope',depth:10,slope:.04,position:.45,height:5,width:30,cx:.6,cy:.5,terrainAngle:0,breakwaters:[],boundary:'west',direction:0,waveMode:'period',waveInput:8,waveHeight:1,phase:0,solver:1,courant:.15,friction:.02,otherBoundary:'sponge'};
+const defaults={schemaVersion:1,nx:160,ny:100,lx:320,ly:200,terrain:'slope',depth:10,slope:.04,position:.45,height:5,width:30,cx:.6,cy:.5,terrainAngle:0,breakwaters:[],boundary:'west',direction:0,waveMode:'period',waveInput:8,waveHeight:1,phase:0,solver:0,courant:.15,friction:.02,otherBoundary:'sponge'};
 let s=structuredClone(defaults),result=null,revision=0,previewId=0,busy=false,pending=false,queued=null,timer,playing=true,phaseTime=0,lastTime=0;
 const worker=new Worker('worker.js');
 let zoom=1,panX=0,panY=0,selectedJ=50,drag=null,transform;
@@ -16,24 +16,21 @@ function field(parent,key,label,opts={}){
  wrap.append(input);$(parent).append(wrap);
 }
 function controls(){
- for(const id of ['gridFields','terrainFields','waveFields','configFields'])$(id).replaceChildren();
+ for(const id of ['gridFields','terrainTypeFields','terrainFields','waveFields','configFields'])$(id).replaceChildren();
  field('gridFields','nx','nx · Cells along x',{step:1,min:16,max:2048});field('gridFields','ny','ny · Cells along y',{step:1,min:16,max:2048});
  field('gridFields','lx','Domain Lx (m)',{min:.01});field('gridFields','ly','Domain Ly (m)',{min:.01});
- field('terrainFields','terrain','Terrain type',{full:true,options:[['flat','Flat bed'],['slope','Uniform slope'],['step','Single step'],['terrace','Three-step terrace'],['bar','Gaussian bar'],['channel','Gaussian channel'],['island','Conical island']]});
- field('terrainFields','depth','Reference depth (m)',{min:.001});field('terrainFields','terrainAngle','Rise / width axis (°)');
- field('terrainFields','slope','Slope Δz / Δx');field('terrainFields','position','Start position (0–1)',{min:0,max:1});
- field('terrainFields','height','Height / step rise (m)');field('terrainFields','width','Width σ / step / radius (m)',{min:.001});
- field('terrainFields','cx','Center x / Lx (0–1)',{min:0,max:1});field('terrainFields','cy','Center y / Ly (0–1)',{min:0,max:1});
+ field('terrainTypeFields','terrain','Terrain type',{full:true,options:[['flat','Flat bed'],['slope','Uniform slope'],['step','Single step'],['terrace','Three-step terrace'],['bar','Gaussian bar'],['channel','Gaussian channel'],['island','Conical island']]});
+ // Only render parameters used by the selected terrain; retain values when switching types.
+ const terrainKeys={flat:['depth'],slope:['depth','terrainAngle','slope','position'],step:['depth','terrainAngle','height','position'],terrace:['depth','terrainAngle','height','position','width'],bar:['depth','terrainAngle','height','width','cx','cy'],channel:['depth','terrainAngle','height','width','cx','cy'],island:['depth','height','width','cx','cy']}[s.terrain]||[];
+ const parameterLabels={depth:'Reference depth (m)',terrainAngle:['bar','channel'].includes(s.terrain)?'Width axis (°)':'Rise direction (°)',slope:'Slope Δz / Δx',position:'Start position (0–1)',height:{step:'Step rise (m)',terrace:'Rise per step (m)',bar:'Bar height (m)',channel:'Channel depth (m)',island:'Island height (m)'}[s.terrain],width:{terrace:'Step width (m)',bar:'Gaussian width σ (m)',channel:'Gaussian width σ (m)',island:'Island radius (m)'}[s.terrain],cx:'Center x / Lx (0–1)',cy:'Center y / Ly (0–1)'};
+ for(const key of terrainKeys)field('terrainFields',key,parameterLabels[key]);
  field('waveFields','boundary','Incident boundary',{full:true,options:[['west','West · x = 0'],['east','East · x = Lx'],['south','South · y = 0'],['north','North · y = Ly']]});
  field('waveFields','direction','Propagation angle (°)');field('waveFields','waveHeight','Wave height H (m)',{min:.00001});
  field('waveFields','waveMode','Wave input',{full:true,options:[['period','Period T → calculate wavelength'],['length','Wavelength L → calculate period']]});
  field('waveFields','waveInput',s.waveMode==='period'?'Period T (s)':'Wavelength L (m)',{min:.001});field('waveFields','phase','Initial phase (°)');
- field('configFields','solver','Governing equations',{full:true,options:[['1','Boussinesq'],['0','NLSW · Long waves']]});
+ field('configFields','solver','Governing equations',{full:true,options:[['0','NLSW · Long waves'],['1','Boussinesq']]});
  field('configFields','courant','Courant number',{min:.001,max:.5});field('configFields','friction','Manning n',{min:0,max:1});
  field('configFields','otherBoundary','Other boundaries',{full:true,options:[['sponge','Absorbing sponge'],['wall','Reflecting wall']]});
- // Dependent fields are disabled instead of leaving inactive parameters ambiguous.
- const active={flat:['depth'],slope:['depth','terrainAngle','slope','position'],step:['depth','terrainAngle','height','position'],terrace:['depth','terrainAngle','height','position','width'],bar:['depth','terrainAngle','height','width','cx','cy'],channel:['depth','terrainAngle','height','width','cx','cy'],island:['depth','height','width','cx','cy']}[s.terrain]||[];
- for(const key of ['depth','terrainAngle','slope','position','height','width','cx','cy'])$(key).disabled=!active.includes(key);
  $('terrainHelp').textContent={flat:'Bed elevation z = −reference depth.',slope:'Rises along the selected axis after the start position. Slope 0.05 = 1:20.',step:'Bed elevation changes by the step rise at the start position.',terrace:'Creates three steps, spaced by the step width, after the start position.',bar:'Adds the specified height at the centerline. Width is the Gaussian standard deviation σ.',channel:'Deepens the centerline by the absolute terrain height. Width is the standard deviation σ.',island:'Height peaks at the center. Beyond the radius, the bed returns to the reference depth.'}[s.terrain];
  renderBreakwaters();
 }
@@ -86,7 +83,7 @@ function updateDiagnostics(){
 function color(v){const r=result;let t=r.zmax===r.zmin?(v>=0?.95:.25):(v-r.zmin)/(r.zmax-r.zmin);const stops=[[20,59,102],[32,142,172],[106,199,192],[232,217,160],[143,105,72]];t=Math.max(0,Math.min(.99999,t))*4;const i=Math.floor(t),f=t-i;return stops[i].map((v,j)=>Math.round(v*(1-f)+stops[i+1][j]*f));}
 function makeRaster(){const r=result;raster.width=r.nx;raster.height=r.ny;const c=raster.getContext('2d'),im=c.createImageData(r.nx,r.ny);for(let j=0;j<r.ny;j++)for(let i=0;i<r.nx;i++){const p=((r.ny-1-j)*r.nx+i)*4;im.data.set([...color(r.z[j*r.nx+i]),255],p);}c.putImageData(im,0,0);coast.width=r.nx;coast.height=r.ny;const cc=coast.getContext('2d');cc.strokeStyle='#ffffffaa';cc.lineWidth=.5;cc.beginPath();for(let j=0;j<r.ny;j++)for(let i=0;i<r.nx;i++){const v=r.z[j*r.nx+i]>=0,y=r.ny-j;if(i+1<r.nx&&v!==(r.z[j*r.nx+i+1]>=0)){cc.moveTo(i+1,y);cc.lineTo(i+1,y-1);}if(j+1<r.ny&&v!==(r.z[(j+1)*r.nx+i]>=0)){cc.moveTo(i,y-1);cc.lineTo(i+1,y-1);}}cc.stroke();}
 function setupCanvas(id){const canvas=$(id),dpr=window.devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);return {c,w,h};}
-function drawMap(){const {c,w,h}=setupCanvas('map');if(!result){c.fillStyle='#6d8289';c.font='13px system-ui';c.fillText('Preparing the Python engine…',25,h/2);return;}
+function drawMap(){const {c,w,h}=setupCanvas('map');if(!result){c.fillStyle='#6d8289';c.font='17px system-ui';c.fillText('Preparing the Python engine…',25,h/2);return;}
  const r=result,lx=r.nx*r.dx,ly=r.ny*r.dy;const base=Math.min((w-70)/lx,(h-65)/ly),scale=base*zoom,W=lx*scale,H=ly*scale,X=(w-W)/2+panX,Y=(h-H)/2+panY;transform={X,Y,W,H,lx,ly};
  c.save();c.beginPath();c.rect(0,0,w,h);c.clip();c.imageSmoothingEnabled=false;c.drawImage(raster,X,Y,W,H);
  if($('showGrid').checked){const step=Math.max(1,Math.ceil(5/Math.min(W/r.nx,H/r.ny)));c.lineWidth=.5;c.strokeStyle='rgba(15,50,65,.28)';c.beginPath();for(let i=0;i<=r.nx;i+=step){const x=X+i/r.nx*W;c.moveTo(x,Y);c.lineTo(x,Y+H);}for(let j=0;j<=r.ny;j+=step){const y=Y+j/r.ny*H;c.moveTo(X,y);c.lineTo(X+W,y);}c.stroke();}
@@ -95,10 +92,10 @@ function drawMap(){const {c,w,h}=setupCanvas('map');if(!result){c.fillStyle='#6d
  const ax=X+W*.22,ay=Y+H*.23,len=50,ex=ax+len*co,ey=ay-len*sn;c.strokeStyle='#123f4b';c.fillStyle='#123f4b';c.lineWidth=3;c.beginPath();c.moveTo(ax,ay);c.lineTo(ex,ey);c.stroke();c.beginPath();c.moveTo(ex,ey);c.lineTo(ex-12*co+6*sn,ey+12*sn+6*co);c.lineTo(ex-12*co-6*sn,ey+12*sn-6*co);c.fill();}
  c.strokeStyle='#0a7872';c.lineWidth=4;c.beginPath();const side=s.boundary;if(side==='west'){c.moveTo(X,Y);c.lineTo(X,Y+H);}if(side==='east'){c.moveTo(X+W,Y);c.lineTo(X+W,Y+H);}if(side==='south'){c.moveTo(X,Y+H);c.lineTo(X+W,Y+H);}if(side==='north'){c.moveTo(X,Y);c.lineTo(X+W,Y);}c.stroke();
  c.setLineDash([5,5]);c.strokeStyle='#20394399';c.lineWidth=1;c.beginPath();c.moveTo(X,Y+H-(selectedJ+.5)/r.ny*H);c.lineTo(X+W,Y+H-(selectedJ+.5)/r.ny*H);c.stroke();c.setLineDash([]);
- c.fillStyle='#425b65';c.font='10px system-ui';c.fillText('0',X-12,Y+H+15);c.fillText(`${fmt(lx,0)} m  → x`,X+W-70,Y+H+17);c.fillText(`↑ y   ${fmt(ly,0)} m`,X,Y-10);c.restore();
+ c.fillStyle='#425b65';c.font='14px system-ui';c.fillText('0',X-12,Y+H+15);c.fillText(`${fmt(lx,0)} m  → x`,X+W-105,Y+H+20);c.fillText(`↑ y   ${fmt(ly,0)} m`,X,Y-10);c.restore();
 }
-function drawSection(){const {c,w,h}=setupCanvas('section');if(!result)return;const r=result,j=Math.max(0,Math.min(r.ny-1,selectedJ));const low=Math.min(r.zmin,-.1),high=Math.max(r.zmax,1),sy=v=>h-20-(v-low)/(high-low)*(h-35);c.fillStyle='#e5f4f7';c.fillRect(30,sy(0),w-40,h-20-sy(0));c.beginPath();c.moveTo(30,h-20);for(let i=0;i<r.nx;i++)c.lineTo(30+i/(r.nx-1)*(w-40),sy(r.z[j*r.nx+i]));c.lineTo(w-10,h-20);c.closePath();c.fillStyle='#b4a88d';c.fill();c.strokeStyle='#46767f';c.beginPath();c.moveTo(30,sy(0));c.lineTo(w-10,sy(0));c.stroke();c.fillStyle='#6d8289';c.font='10px system-ui';c.fillText('0 m',0,sy(0)+3);$('sectionAt').textContent=`j = ${j} · y = ${fmt((j+.5)*r.dy)} m`;}
-function drawSine(){const {c,w,h}=setupCanvas('sine');if(!result||result.generationDepth<=1e-4)return;const r=result;c.strokeStyle='#dbe5e7';c.beginPath();c.moveTo(0,h/2);c.lineTo(w,h/2);c.stroke();c.strokeStyle='#0a7872';c.lineWidth=2;c.beginPath();for(let x=0;x<w;x++){const y=h/2-25*Math.sin(2*Math.PI*(phaseTime/r.T-x/w*2)+r.phase);x?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.fillStyle='#6d8289';c.font='10px system-ui';c.fillText(`H = ${fmt(r.H)} m · Display width 2L`,4,12);}
+function drawSection(){const {c,w,h}=setupCanvas('section');if(!result)return;const r=result,j=Math.max(0,Math.min(r.ny-1,selectedJ));const low=Math.min(r.zmin,-.1),high=Math.max(r.zmax,1),sy=v=>h-20-(v-low)/(high-low)*(h-35);c.fillStyle='#e5f4f7';c.fillRect(30,sy(0),w-40,h-20-sy(0));c.beginPath();c.moveTo(30,h-20);for(let i=0;i<r.nx;i++)c.lineTo(30+i/(r.nx-1)*(w-40),sy(r.z[j*r.nx+i]));c.lineTo(w-10,h-20);c.closePath();c.fillStyle='#b4a88d';c.fill();c.strokeStyle='#46767f';c.beginPath();c.moveTo(30,sy(0));c.lineTo(w-10,sy(0));c.stroke();c.fillStyle='#6d8289';c.font='14px system-ui';c.fillText('0 m',0,sy(0)+3);$('sectionAt').textContent=`j = ${j} · y = ${fmt((j+.5)*r.dy)} m`;}
+function drawSine(){const {c,w,h}=setupCanvas('sine');if(!result||result.generationDepth<=1e-4)return;const r=result;c.strokeStyle='#dbe5e7';c.beginPath();c.moveTo(0,h/2);c.lineTo(w,h/2);c.stroke();c.strokeStyle='#0a7872';c.lineWidth=2;c.beginPath();for(let x=0;x<w;x++){const y=h/2-25*Math.sin(2*Math.PI*(phaseTime/r.T-x/w*2)+r.phase);x?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.fillStyle='#6d8289';c.font='14px system-ui';c.fillText(`H = ${fmt(r.H)} m · Display width 2L`,4,16);}
 function animate(t){if(playing&&lastTime)phaseTime+=(t-lastTime)/1000;lastTime=t;drawMap();drawSine();drawSection();requestAnimationFrame(animate);}
 $('map').onwheel=e=>{e.preventDefault();zoom=Math.max(1,Math.min(12,zoom*(e.deltaY<0?1.15:1/1.15)));if(zoom===1){panX=panY=0;}};
 $('map').onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,px:panX,py:panY};$('map').setPointerCapture(e.pointerId);};
