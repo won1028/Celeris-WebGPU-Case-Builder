@@ -30,7 +30,37 @@ Open `http://localhost:8000`. Opening files directly with `file://` may block wo
 - All numeric settings use direct text entry with a numeric/decimal keyboard hint. There are no increment/decrement buttons; arrow keys and the mouse wheel do not change numeric values. Python still validates numeric ranges and integer indices. Empty or invalid entries block export.
 - Preview and export share the Python geometry and validation engine.
 - Dry or obstructed incident boundaries are disabled. Outward waves, invalid numbers, and structures outside the domain block export.
-- Reload saved settings JSON. Limits: 1,048,576 cells and 30 breakwaters.
+- Reload saved settings JSON. Up to 30 breakwaters. Grid dimensions must be integers of at least 16; there is no application-defined upper limit on nx, ny, or their product.
+
+## Validation warnings
+
+Warnings do not block export. They appear in the page and in `validation_report.json`.
+
+| Warning text | Trigger |
+|---|---|
+| A breakwater is thinner than two cells. Terrain cleanup may alter its shape. | An enabled breakwater has thickness < 2 × max(dx, dy). |
+| Depth variation in the generation zone exceeds 5%. Waves use a single base_depth. | Maximum depth − minimum depth in the outer five cell rows/columns exceeds 5% of the zone's mean depth. |
+| There are fewer than 20 cells per wavelength. Check grid convergence. | L / max(dx, dy) < 20, using the wavelength at the generation-zone mean depth. |
+| Oblique incidence from a single boundary may produce adjacent-boundary and corner effects. | abs(sin(angle) × cos(angle)) > 0.001, with the angle converted to radians. |
+
+There is no grid-size warning or application-defined upper grid-size limit. NLSW long-wave, Boussinesq deep-water dispersion, and strong-nonlinearity applicability warnings are not emitted. Relative-depth and wave diagnostics are still displayed.
+
+### Errors that block export
+
+These are separate from the advisory warnings above.
+
+| Error category | Trigger |
+|---|---|
+| Invalid inputs | Non-finite values, values outside allowed parameter ranges, non-integer cell counts or breakwater indices, unsupported options, or more than 30 breakwaters. nx and ny must each be at least 16. |
+| Structure outside domain | Any part of a breakwater's rectangular footprint extends outside the domain. |
+| Structure misses grid | An enabled breakwater intersects no cell centers. |
+| Dry generation zone | Any cell in the outer five rows/columns at the incident boundary has depth ≤ 0.0001 m. |
+| Obstructed generation zone | A breakwater overlaps the outer five rows/columns at the incident boundary, including submerged structures. |
+| Outward or tangential waves | The inward component of the unit travel direction is ≤ 0.000001. |
+| No wet cells | No domain cell has depth > 0.0001 m. |
+| Wave trough reaches bed | H/2 ≥ the minimum depth in the generation zone. |
+
+Invalid settings-file formats and runtime failures are also reported as errors.
 
 ## Source layout
 
@@ -79,7 +109,7 @@ The loader flattens edge bathymetry using interior samples at index 4 or the cor
 - Only one generation boundary is supported. Review adjacent-boundary and corner effects for oblique incidence.
 - Breakwaters are impermeable raised terrain; porous transmission is not modeled.
 - One mean-depth diagnostic cannot establish model accuracy over strongly varying terrain. Warnings do not replace convergence studies.
-- The browser cell limit protects memory. Performance at the maximum size depends on the device.
+- Grid size is not capped by the application. Actual capacity and processing time depend on browser memory and device resources.
 - Pyodide is pinned to version 0.27.7 and loaded from jsDelivr. Design inputs are not sent to an external computation server.
 
 ## Python CLI and tests
@@ -90,5 +120,5 @@ python -m unittest -v
 ```
 
 Only the Python standard library is required. The browser and CLI use the same `engine.py`.
-Nine automated tests cover dispersion, ZIP contents and matrix/header formats, all seven terrain types, terrain orientation, outward-wave rejection, submerged and boundary breakwaters, dry boundaries and excessive wave height, wavelength input, and invalid numbers and size limits.
+Ten automated tests cover dispersion, ZIP contents and matrix/header formats, all seven terrain types, terrain orientation, outward-wave rejection, submerged and boundary breakwaters, dry boundaries and excessive wave height, wavelength input, and invalid numbers, and grids exceeding the former total-cell and per-axis caps.
 See `VALIDATION.md` for verification details.

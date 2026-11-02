@@ -49,7 +49,11 @@ class EngineTests(unittest.TestCase):
         for key,value in [('nx',1.5),('ny',float('nan')),('lx',0),('waveInput',-1),('depth',float('inf'))]:
             s=settings();s[key]=value
             with self.assertRaises(ValueError):build(s)
-        s=settings();s.update(nx=2048,ny=2048)
-        with self.assertRaises(ValueError):build(s)
+    def test_grid_without_artificial_caps(self):
+        s=settings();s.update(nx=2050,ny=512)
+        r=build(s)
+        self.assertEqual(len(r['z']),2050*512)
+        self.assertFalse(r['errors'])
+        self.assertFalse(r['warnings'])
 
 if __name__=='__main__':unittest.main()

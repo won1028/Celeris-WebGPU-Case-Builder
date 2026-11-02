@@ -12,8 +12,8 @@ function parameterHelp(key){
  const terrainHeight={step:'Signed bed-elevation change at the step, in meters. Positive values raise the bed.',terrace:'Signed rise of each of three steps, in meters. The final change is three times this value.',bar:'Signed peak elevation change at the bar centerline, in meters.',channel:'Additional centerline depth in meters. The engine uses the absolute value to deepen the bed.',island:'Signed elevation change at the island center, in meters. For a positive height, summit elevation is height − depth.'};
  const terrainWidth={terrace:'Distance between consecutive steps along the selected angle, in meters. Must be positive.',bar:'Gaussian standard deviation σ along the width axis, in meters. At one σ from the centerline, the elevation change is about 60.7% of its peak.',channel:'Gaussian standard deviation σ across the channel, in meters. The channel extends along the perpendicular axis.',island:'Island radius in meters. The elevation change decreases linearly to zero at this radius.'};
  return {
- nx:'Number of cells along x (west to east). Integer from 16 to 2048. nx × ny must not exceed 1,048,576.',
- ny:'Number of cells along y (south to north). Integer from 16 to 2048. nx × ny must not exceed 1,048,576.',
+ nx:'Number of cells along x (west to east). Integer of at least 16.',
+ ny:'Number of cells along y (south to north). Integer of at least 16.',
  lx:'Domain length along x in meters, measured between outer cell boundaries. dx = Lx / nx.',
  ly:'Domain length along y in meters, measured between outer cell boundaries. dy = Ly / ny.',
  terrain:'Idealized bed shape. Only parameters used by this shape are shown. Previously entered values are retained when switching shapes.',
@@ -78,7 +78,7 @@ function field(parent,key,label,opts={}){
 }
 function controls(){
  for(const id of ['gridFields','terrainTypeFields','terrainFields','waveFields','configFields'])$(id).replaceChildren();
- field('gridFields','nx','nx',{step:1,min:16,max:2048});field('gridFields','ny','ny',{step:1,min:16,max:2048});
+ field('gridFields','nx','nx',{step:1,min:16});field('gridFields','ny','ny',{step:1,min:16});
  field('gridFields','lx','Lx (m)',{min:.01});field('gridFields','ly','Ly (m)',{min:.01});
  field('terrainTypeFields','terrain','type',{full:true,options:[['flat','Flat bed'],['slope','Uniform slope'],['step','Single step'],['terrace','Three-step terrace'],['bar','Gaussian bar'],['channel','Gaussian channel'],['island','Conical island']]});
  // Only render parameters used by the selected terrain; retain values when switching types.

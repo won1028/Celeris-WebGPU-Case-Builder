@@ -2,7 +2,6 @@
 import json, math, io, zipfile
 
 G = 9.81
-MAX_CELLS = 1048576
 
 def finite(value, name, low=None, high=None):
     if isinstance(value, bool):
@@ -24,10 +23,9 @@ def wave_length(period, depth):
     return 2*math.pi/((lo+hi)/2)
 
 def build(s):
-    nxf, nyf = finite(s['nx'], 'nx', 16, 2048), finite(s['ny'], 'ny', 16, 2048)
+    nxf, nyf = finite(s['nx'], 'nx', 16), finite(s['ny'], 'ny', 16)
     if not nxf.is_integer() or not nyf.is_integer(): raise ValueError('nx and ny must be integers.')
     nx, ny = int(nxf), int(nyf)
-    if nx*ny > MAX_CELLS: raise ValueError('The browser version supports up to 1,048,576 cells.')
     lx, ly = finite(s['lx'], 'Lx', .01, 1e7), finite(s['ly'], 'Ly', .01, 1e7)
     dx, dy = lx/nx, ly/ny
     depth = finite(s['depth'], 'Reference depth', .001, 1e5)
