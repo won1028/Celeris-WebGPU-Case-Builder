@@ -36,16 +36,36 @@ function parameterHelp(key){
  otherBoundary:'Condition on the three boundaries not selected for wave generation: absorbing sponge or reflecting wall.'
  }[key];
 }
+// A native modal contains keyboard focus and supports Escape dismissal.
+const helpDialog=document.createElement('dialog');
+helpDialog.className='helpDialog';helpDialog.id='parameter-help';
+helpDialog.setAttribute('aria-labelledby','parameter-help-title');
+helpDialog.setAttribute('aria-describedby','parameter-help-text');
+const helpHeader=document.createElement('div');helpHeader.className='helpDialogHeader';
+const helpTitle=document.createElement('h2');helpTitle.id='parameter-help-title';
+const helpClose=document.createElement('button');helpClose.type='button';helpClose.textContent='×';helpClose.setAttribute('aria-label','Close help');
+const helpText=document.createElement('p');helpText.id='parameter-help-text';
+helpHeader.append(helpTitle,helpClose);helpDialog.append(helpHeader,helpText);document.body.append(helpDialog);
+let helpTrigger=null;
+helpClose.onclick=()=>helpDialog.close();
+helpDialog.addEventListener('click',event=>{
+ const rect=helpDialog.getBoundingClientRect();
+ if(event.target===helpDialog&&(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom))helpDialog.close();
+});
+helpDialog.addEventListener('close',()=>{
+ if(helpTrigger?.isConnected)helpTrigger.focus();
+ helpTrigger=null;
+});
 function fieldHeading(wrap,input,label,help){
  const row=document.createElement('div');row.className='fieldHeading';
  const title=document.createElement('label');title.htmlFor=input.id;title.textContent=label;
  const info=document.createElement('button');info.type='button';info.className='infoButton';info.textContent='ⓘ';
- info.setAttribute('aria-label','Help for '+label);info.setAttribute('aria-expanded','false');
- const detail=document.createElement('p');detail.id=input.id+'-help';detail.className='fieldHelp';detail.hidden=true;detail.textContent=help;
- info.setAttribute('aria-controls',detail.id);input.setAttribute('aria-describedby',detail.id);
- info.onclick=()=>{detail.hidden=!detail.hidden;info.setAttribute('aria-expanded',String(!detail.hidden));};
- wrap.onkeydown=e=>{if(e.key==='Escape'&&!detail.hidden){detail.hidden=true;info.setAttribute('aria-expanded','false');info.focus();e.stopPropagation();}};
- row.append(title,info);wrap.append(row,input,detail);
+ info.setAttribute('aria-label','Help for '+label);info.setAttribute('aria-haspopup','dialog');info.setAttribute('aria-controls',helpDialog.id);
+ info.onclick=()=>{
+  helpTrigger=info;helpTitle.textContent=label;helpText.textContent=help;
+  helpDialog.showModal();helpClose.focus();
+ };
+ row.append(title,info);wrap.append(row,input);
 }
 
 function field(parent,key,label,opts={}){
